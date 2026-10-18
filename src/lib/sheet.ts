@@ -1,5 +1,6 @@
-import { read, utils, type WorkBook } from "xlsx";
+import { read, utils, type WorkBook, type WorkSheet, writeFile } from "xlsx";
 import { getFirstNonEmptyRowIndex, isEmptyRow, type Sheet } from "./planner";
+import { getRegionLabel } from "./regions";
 
 const READ_ERROR = "Não foi possível ler o arquivo.";
 const EMPTY_ERROR = "O arquivo está vazio.";
@@ -69,4 +70,61 @@ export const getColumnLabels = (headers: string[]): string[] => {
     }
     return header;
   });
+};
+
+export const getExportFileName = (fileName: string) =>
+  `${fileName.replace(/\.[^.]+$/, "")}-regioes.xlsx`;
+
+// `\p{Diacritic}` needs ES2018 and tsconfig targets ES2017.
+const isRegionHeader = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") === "regiao";
+
+export const buildExportWorksheet = (
+  sheet: Sheet,
+  assignments: Map<number, number>,
+): WorkSheet => {
+  // Copying the original worksheet keeps number formats that rebuilding from
+  // `rawRows` would lose; cell objects are shared but never mutated.
+  const worksheet: WorkSheet = { ...sheet.worksheet };
+  const headerRowIndex = sheet.headerRowIndex;
+  const ref = worksheet["!ref"];
+  if (headerRowIndex === null || !ref) return worksheet;
+
+  const range = utils.decode_range(ref);
+  const existingColumn = Array.from(
+    sheet.rawRows[headerRowIndex] ?? [],
+  ).findIndex(isRegionHeader);
+  const column = existingColumn === -1 ? range.e.c + 1 : existingColumn;
+
+  worksheet[utils.encode_cell({ r: headerRowIndex, c: column })] = {
+    t: "s",
+    v: "Região",
+  };
+  for (let row = headerRowIndex + 1; row <= range.e.r; row++) {
+    const address = utils.encode_cell({ r: row, c: column });
+    const region = assignments.get(row);
+    if (region === undefined) {
+      delete worksheet[address];
+    } else {
+      worksheet[address] = { t: "s", v: getRegionLabel(region) };
+    }
+  }
+
+  range.e.c = Math.max(range.e.c, column);
+  worksheet["!ref"] = utils.encode_range(range);
+  return worksheet;
+};
+
+export const exportSheet = (sheet: Sheet, assignments: Map<number, number>) => {
+  const workbook = utils.book_new();
+  utils.book_append_sheet(
+    workbook,
+    buildExportWorksheet(sheet, assignments),
+    sheet.sheetName,
+  );
+  writeFile(workbook, getExportFileName(sheet.fileName), { bookType: "xlsx" });
 };

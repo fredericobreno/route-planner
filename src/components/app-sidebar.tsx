@@ -1,10 +1,12 @@
 import { MapPinned } from "lucide-react";
 import EditingBanner from "@/components/editing-banner";
+import ExportButton from "@/components/export-button";
 import GroupingForm from "@/components/grouping-form";
 import SheetImport from "@/components/sheet-import";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
 } from "@/components/ui/sidebar";
 
@@ -19,6 +21,9 @@ const AppSidebar = () => (
       <GroupingForm />
       <EditingBanner />
     </SidebarContent>
+    <SidebarFooter className="border-t p-4">
+      <ExportButton />
+    </SidebarFooter>
   </Sidebar>
 );
 

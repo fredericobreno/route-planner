@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { utils, write } from "xlsx";
-import { getColumnLabels, readSheet } from "./sheet";
+import { read, utils, type WorkSheet, write } from "xlsx";
+import type { Sheet } from "./planner";
+import {
+  buildExportWorksheet,
+  getColumnLabels,
+  getExportFileName,
+  readSheet,
+} from "./sheet";
 
 const toArrayBuffer = (data: Uint8Array): ArrayBuffer =>
   data.buffer.slice(
@@ -137,6 +143,151 @@ describe("getColumnLabels", () => {
       "x",
       "y",
       "Lat (F)",
+    ]);
+  });
+});
+
+describe("getExportFileName", () => {
+  it.each([
+    ["clientes.xlsx", "clientes-regioes.xlsx"],
+    ["base.v2.csv", "base.v2-regioes.xlsx"],
+    ["semextensao", "semextensao-regioes.xlsx"],
+  ])("%s → %s", (fileName, expected) => {
+    expect(getExportFileName(fileName)).toBe(expected);
+  });
+});
+
+describe("buildExportWorksheet", () => {
+  const buildExportSheet = (rows: unknown[][]): Sheet => {
+    const worksheet = utils.aoa_to_sheet(rows);
+    return {
+      fileName: "clientes.xlsx",
+      sheetName: "Dados",
+      worksheet,
+      rawRows: rows,
+      headerRowIndex: 2,
+    };
+  };
+
+  const rows = [
+    ["Relatório"],
+    [],
+    ["nome", "lat", "lng"],
+    ["A", "-3,7", "-38,5"],
+    ["B", "abc", "-38,5"],
+    ["C", "-3,8", "-38,6"],
+  ];
+
+  const toRows = (worksheet: WorkSheet) =>
+    utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: null });
+
+  it("adds a Região column after the last one", () => {
+    const sheet = buildExportSheet(rows);
+
+    const worksheet = buildExportWorksheet(sheet, new Map([[3, 1]]));
+
+    expect(worksheet.D3.v).toBe("Região");
+    expect(worksheet.D4.v).toBe("Região 1");
+    expect(worksheet.D5).toBeUndefined();
+    expect(worksheet.D6).toBeUndefined();
+    expect(worksheet.D1).toBeUndefined();
+    expect(worksheet.A1.v).toBe("Relatório");
+    expect(worksheet["!ref"]).toBe("A1:D6");
+  });
+
+  it("overwrites an existing Região column", () => {
+    const sheet = buildExportSheet([
+      ["Relatório"],
+      [],
+      ["nome", " REGIAO ", "lat"],
+      ["A", "Velha 1", "-3,7"],
+      ["B", "Velha 2", "-3,8"],
+    ]);
+
+    const worksheet = buildExportWorksheet(sheet, new Map([[4, 2]]));
+
+    expect(worksheet.B3.v).toBe("Região");
+    expect(worksheet.B4).toBeUndefined();
+    expect(worksheet.B5.v).toBe("Região 2");
+    expect(worksheet.D3).toBeUndefined();
+    expect(worksheet["!ref"]).toBe("A1:C5");
+  });
+
+  it("leaves the column empty without assignments", () => {
+    const worksheet = buildExportWorksheet(buildExportSheet(rows), new Map());
+
+    expect(toRows(worksheet).map((row) => row[3])).toEqual([
+      null,
+      null,
+      "Região",
+      null,
+      null,
+      null,
+    ]);
+  });
+
+  it("keeps original values and number formats", () => {
+    const sheet = buildExportSheet(rows);
+    sheet.worksheet.A4.z = "dd/mm/yyyy";
+
+    const worksheet = buildExportWorksheet(sheet, new Map([[3, 1]]));
+
+    expect(worksheet.A4).toEqual(sheet.worksheet.A4);
+    expect(worksheet.A4.z).toBe("dd/mm/yyyy");
+    expect(toRows(worksheet).map((row) => row.slice(0, 3))).toEqual(
+      toRows(sheet.worksheet).map((row) => row.slice(0, 3)),
+    );
+  });
+
+  it("does not mutate the original worksheet", () => {
+    const sheet = buildExportSheet(rows);
+    const before = { ...sheet.worksheet };
+
+    buildExportWorksheet(sheet, new Map([[3, 1]]));
+
+    expect(sheet.worksheet).toEqual(before);
+  });
+
+  it("returns the worksheet unchanged without a header row", () => {
+    const sheet = { ...buildExportSheet(rows), headerRowIndex: null };
+
+    expect(buildExportWorksheet(sheet, new Map([[3, 1]]))).toEqual(
+      sheet.worksheet,
+    );
+  });
+
+  it("round-trips through xlsx", () => {
+    const sheet = buildExportSheet(rows);
+    const workbook = utils.book_new();
+    utils.book_append_sheet(
+      workbook,
+      buildExportWorksheet(
+        sheet,
+        new Map([
+          [3, 1],
+          [5, 2],
+        ]),
+      ),
+      sheet.sheetName,
+    );
+
+    const data = write(workbook, { type: "array", bookType: "xlsx" });
+    const readBack = read(data, { type: "array" });
+
+    expect(readBack.SheetNames).toEqual(["Dados"]);
+    expect(
+      utils.sheet_to_json(readBack.Sheets.Dados, {
+        header: 1,
+        blankrows: true,
+        defval: null,
+      }),
+    ).toEqual([
+      ["Relatório", null, null, null],
+      [null, null, null, null],
+      ["nome", "lat", "lng", "Região"],
+      ["A", "-3,7", "-38,5", "Região 1"],
+      ["B", "abc", "-38,5", null],
+      ["C", "-3,8", "-38,6", "Região 2"],
     ]);
   });
 });
