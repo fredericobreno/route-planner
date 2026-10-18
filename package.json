@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "biome check",
     "format": "biome format --write",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "fixtures:generate": "node scripts/generate-fixtures.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

@@ -105,23 +105,23 @@ Exibido após importação e após exportação:
 
 ## Critérios de aceite
 
-- [ ] Upload aceita `.xlsx`, `.xls`, `.csv` e lê só a primeira aba.
-- [ ] Usuário escolhe a linha de cabeçalho a partir de uma prévia.
-- [ ] Usuário seleciona colunas de latitude e longitude após escolher o cabeçalho.
-- [ ] Vírgula decimal é convertida para ponto.
-- [ ] Linhas totalmente vazias são ignoradas.
-- [ ] Coordenadas vazias, não numéricas ou fora do intervalo contam como inválidas e não vão ao mapa.
-- [ ] Novo upload com dados carregados pede confirmação em modal.
-- [ ] "Gerar grupos" cria `ceil(n / tamanho)` grupos com tamanho exato e resto no último.
-- [ ] Tamanho maior que o total gera 1 grupo.
-- [ ] Gerar novamente com grupos existentes pede confirmação em modal.
-- [ ] Cada grupo aparece como região convex hull; grupos com 1–2 pontos aparecem como linha/ponto com buffer de 12 px.
-- [ ] Clicar em região ativa edição; clicar em ponto dentro remove, fora adiciona (inclusive de outra região).
-- [ ] Clicar em outra região durante a edição troca a região em edição.
-- [ ] Sair da edição funciona por clique fora, `Esc` e botão "Concluir".
-- [ ] Região vazia é removida e as regiões são renumeradas.
-- [ ] "Exportar" habilitado logo após a importação.
-- [ ] Export contém todas as linhas originais (inclusive as acima do cabeçalho) + coluna `Região`, vazia para sem região/inválidos, e sobrescreve coluna existente.
-- [ ] Arquivo exportado se chama `<nome-original>-regioes.xlsx`.
-- [ ] Sidebar mostra resumo após importação e exportação.
+- [x] Upload aceita `.xlsx`, `.xls`, `.csv` e lê só a primeira aba.
+- [x] Usuário escolhe a linha de cabeçalho a partir de uma prévia.
+- [x] Usuário seleciona colunas de latitude e longitude após escolher o cabeçalho.
+- [x] Vírgula decimal é convertida para ponto.
+- [x] Linhas totalmente vazias são ignoradas.
+- [x] Coordenadas vazias, não numéricas ou fora do intervalo contam como inválidas e não vão ao mapa.
+- [x] Novo upload com dados carregados pede confirmação em modal.
+- [x] "Gerar grupos" cria `ceil(n / tamanho)` grupos com tamanho exato e resto no último.
+- [x] Tamanho maior que o total gera 1 grupo.
+- [x] Gerar novamente com grupos existentes pede confirmação em modal.
+- [x] Cada grupo aparece como região convex hull; grupos com 1–2 pontos aparecem como linha/ponto com buffer de 12 px.
+- [x] Clicar em região ativa edição; clicar em ponto dentro remove, fora adiciona (inclusive de outra região).
+- [x] Clicar em outra região durante a edição troca a região em edição.
+- [x] Sair da edição funciona por clique fora, `Esc` e botão "Concluir".
+- [x] Região vazia é removida e as regiões são renumeradas.
+- [x] "Exportar" habilitado logo após a importação.
+- [x] Export contém todas as linhas originais (inclusive as acima do cabeçalho) + coluna `Região`, vazia para sem região/inválidos, e sobrescreve coluna existente.
+- [x] Arquivo exportado se chama `<nome-original>-regioes.xlsx`.
+- [x] Sidebar mostra resumo após importação e exportação.
 
