@@ -1,5 +1,9 @@
+import type { WorkSheet } from "xlsx";
+
 export type Sheet = {
   fileName: string;
+  sheetName: string;
+  worksheet: WorkSheet;
   rawRows: unknown[][];
   headerRowIndex: number | null;
 };
@@ -88,6 +92,50 @@ export const plannerReducer = (
 const isEmptyCell = (cell: unknown) =>
   cell === null || cell === undefined || String(cell).trim() === "";
 
+export const isEmptyRow = (cells: unknown[]) =>
+  Array.from(cells).every(isEmptyCell);
+
+export const getFirstNonEmptyRowIndex = (rows: unknown[][]): number | null => {
+  const index = rows.findIndex((cells) => !isEmptyRow(cells));
+  return index === -1 ? null : index;
+};
+
+export const getPreviewRows = (rows: unknown[][], limit = 10): ClientRow[] =>
+  rows
+    .map((cells, rowIndex) => ({ rowIndex, cells }))
+    .filter(({ cells }) => !isEmptyRow(cells))
+    .slice(0, limit);
+
+export const parseCoordinate = (
+  value: unknown,
+  limit: number,
+): number | null => {
+  if (isEmptyCell(value)) return null;
+  const number = Number(String(value).trim().replace(",", "."));
+  if (!Number.isFinite(number) || number < -limit || number > limit) {
+    return null;
+  }
+  return number;
+};
+
+export const getClients = (
+  rows: ClientRow[],
+  mapping: ColumnMapping,
+): { clients: Client[]; invalidRowIndexes: number[] } => {
+  const clients: Client[] = [];
+  const invalidRowIndexes: number[] = [];
+  for (const { rowIndex, cells } of rows) {
+    const lat = parseCoordinate(cells[mapping.latColumn], 90);
+    const lng = parseCoordinate(cells[mapping.lngColumn], 180);
+    if (lat === null || lng === null) {
+      invalidRowIndexes.push(rowIndex);
+    } else {
+      clients.push({ rowIndex, lat, lng });
+    }
+  }
+  return { clients, invalidRowIndexes };
+};
+
 export const getHeaders = (sheet: Sheet): string[] => {
   if (sheet.headerRowIndex === null) return [];
   const headerRow = sheet.rawRows[sheet.headerRowIndex] ?? [];
@@ -99,7 +147,7 @@ export const getClientRows = (sheet: Sheet): ClientRow[] => {
   return sheet.rawRows
     .map((cells, rowIndex) => ({ rowIndex, cells }))
     .slice(sheet.headerRowIndex + 1)
-    .filter(({ cells }) => !Array.from(cells).every(isEmptyCell));
+    .filter(({ cells }) => !isEmptyRow(cells));
 };
 
 export const renumberRegions = (

@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { renumberRegions } from "./planner";
+import {
+  getClientRows,
+  getClients,
+  getFirstNonEmptyRowIndex,
+  getPreviewRows,
+  parseCoordinate,
+  renumberRegions,
+  type Sheet,
+} from "./planner";
+
+const buildSheet = (
+  rawRows: unknown[][],
+  headerRowIndex: number | null,
+): Sheet => ({
+  fileName: "clientes.xlsx",
+  sheetName: "Dados",
+  worksheet: {},
+  rawRows,
+  headerRowIndex,
+});
 
 describe("renumberRegions", () => {
   it("closes gaps keeping relative order", () => {
@@ -48,5 +67,118 @@ describe("renumberRegions", () => {
         [1, 5],
       ]),
     );
+  });
+});
+
+describe("parseCoordinate", () => {
+  it("converts a decimal comma to a point", () => {
+    expect(parseCoordinate("-3,7319", 90)).toBe(-3.7319);
+  });
+
+  it("trims surrounding spaces", () => {
+    expect(parseCoordinate(" 12.5 ", 90)).toBe(12.5);
+  });
+
+  it("accepts numeric values", () => {
+    expect(parseCoordinate(-38.5, 180)).toBe(-38.5);
+  });
+
+  it.each([
+    "",
+    "   ",
+    null,
+    undefined,
+  ])("returns null for empty %j", (value) => {
+    expect(parseCoordinate(value, 90)).toBeNull();
+  });
+
+  it("returns null for non-numeric values", () => {
+    expect(parseCoordinate("abc", 90)).toBeNull();
+  });
+
+  it("applies the latitude limit", () => {
+    expect(parseCoordinate(90, 90)).toBe(90);
+    expect(parseCoordinate(-90, 90)).toBe(-90);
+    expect(parseCoordinate(90.0001, 90)).toBeNull();
+  });
+
+  it("applies the longitude limit", () => {
+    expect(parseCoordinate(180, 180)).toBe(180);
+    expect(parseCoordinate(-180.1, 180)).toBeNull();
+  });
+});
+
+describe("getClients", () => {
+  it("splits valid clients from invalid rows", () => {
+    const rows = [
+      { rowIndex: 1, cells: ["A", "-3,7319", "-38,5267"] },
+      { rowIndex: 2, cells: ["B", "", "-38.5"] },
+      { rowIndex: 3, cells: ["C", "-3.7", "abc"] },
+      { rowIndex: 4, cells: ["D", 95, -38] },
+      { rowIndex: 5, cells: ["E", -3.8, -38.6] },
+    ];
+
+    expect(getClients(rows, { latColumn: 1, lngColumn: 2 })).toEqual({
+      clients: [
+        { rowIndex: 1, lat: -3.7319, lng: -38.5267 },
+        { rowIndex: 5, lat: -3.8, lng: -38.6 },
+      ],
+      invalidRowIndexes: [2, 3, 4],
+    });
+  });
+});
+
+describe("getClientRows", () => {
+  it("excludes rows up to the header", () => {
+    const sheet = buildSheet(
+      [["Título"], ["Sub"], ["nome", "lat"], ["A", 1], ["B", 2]],
+      2,
+    );
+
+    expect(getClientRows(sheet)).toEqual([
+      { rowIndex: 3, cells: ["A", 1] },
+      { rowIndex: 4, cells: ["B", 2] },
+    ]);
+  });
+
+  it("skips fully empty rows", () => {
+    const sheet = buildSheet(
+      [["nome", "lat"], ["A", 1], [], [null, ""], ["  "], ["B", 2]],
+      0,
+    );
+
+    expect(getClientRows(sheet).map(({ rowIndex }) => rowIndex)).toEqual([
+      1, 5,
+    ]);
+  });
+
+  it("returns no rows without a header", () => {
+    expect(getClientRows(buildSheet([["A"]], null))).toEqual([]);
+  });
+});
+
+describe("getFirstNonEmptyRowIndex", () => {
+  it("skips leading empty rows", () => {
+    expect(getFirstNonEmptyRowIndex([[], [null, " "], ["nome"]])).toBe(2);
+  });
+
+  it("returns null when every row is empty", () => {
+    expect(getFirstNonEmptyRowIndex([[], [null]])).toBeNull();
+  });
+});
+
+describe("getPreviewRows", () => {
+  it("keeps original indexes of non-empty rows", () => {
+    expect(getPreviewRows([[], ["a"], [null], ["b"]])).toEqual([
+      { rowIndex: 1, cells: ["a"] },
+      { rowIndex: 3, cells: ["b"] },
+    ]);
+  });
+
+  it("respects the limit", () => {
+    const rows = Array.from({ length: 20 }, (_, i) => [i]);
+
+    expect(getPreviewRows(rows, 10)).toHaveLength(10);
+    expect(getPreviewRows(rows)).toHaveLength(10);
   });
 });

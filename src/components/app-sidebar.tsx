@@ -1,4 +1,5 @@
 import { MapPinned } from "lucide-react";
+import SheetImport from "@/components/sheet-import";
 import {
   Sidebar,
   SidebarContent,
@@ -11,7 +12,9 @@ const AppSidebar = () => (
       <MapPinned className="size-5" />
       <h1 className="font-semibold">Route Planner</h1>
     </SidebarHeader>
-    <SidebarContent />
+    <SidebarContent>
+      <SheetImport />
+    </SidebarContent>
   </Sidebar>
 );
 

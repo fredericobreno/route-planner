@@ -9,9 +9,11 @@ import {
   useReducer,
 } from "react";
 import {
+  type Client,
   type ClientRow,
   createInitialState,
   getClientRows,
+  getClients,
   getHeaders,
   type PlannerAction,
   type PlannerState,
@@ -23,6 +25,8 @@ type PlannerContextValue = {
   dispatch: Dispatch<PlannerAction>;
   headers: string[];
   clientRows: ClientRow[];
+  clients: Client[];
+  invalidRowIndexes: number[];
 };
 
 const PlannerContext = createContext<PlannerContextValue | null>(null);
@@ -42,9 +46,25 @@ const PlannerProvider = ({ children }: { children: ReactNode }) => {
     () => (state.sheet ? getClientRows(state.sheet) : []),
     [state.sheet],
   );
+  const { clients, invalidRowIndexes } = useMemo(
+    () =>
+      state.columnMapping
+        ? getClients(clientRows, state.columnMapping)
+        : { clients: [], invalidRowIndexes: [] },
+    [clientRows, state.columnMapping],
+  );
 
   return (
-    <PlannerContext value={{ state, dispatch, headers, clientRows }}>
+    <PlannerContext
+      value={{
+        state,
+        dispatch,
+        headers,
+        clientRows,
+        clients,
+        invalidRowIndexes,
+      }}
+    >
       {children}
     </PlannerContext>
   );
