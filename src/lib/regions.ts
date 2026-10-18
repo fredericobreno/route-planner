@@ -14,6 +14,20 @@ export const getRegionColor = (region: number) =>
 
 export const getRegionLabel = (region: number) => `Região ${region}`;
 
+// Area in squared degrees: only used to order shapes, so latitude distortion
+// does not matter.
+export const getShapeArea = (shape: RegionShape): number => {
+  if (shape.kind !== "polygon") return 0;
+  const { positions } = shape;
+  let doubledArea = 0;
+  for (let i = 0; i < positions.length; i++) {
+    const [lat1, lng1] = positions[i];
+    const [lat2, lng2] = positions[(i + 1) % positions.length];
+    doubledArea += lng1 * lat2 - lng2 * lat1;
+  }
+  return Math.abs(doubledArea) / 2;
+};
+
 const isCollinear = (points: LatLngTuple[]) => {
   const [[lat0, lng0], [lat1, lng1]] = points;
   return points.every(

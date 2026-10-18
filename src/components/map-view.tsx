@@ -26,6 +26,7 @@ import {
   getRegionColor,
   getRegionLabel,
   getRegionShapes,
+  getShapeArea,
   type RegionShape,
 } from "@/lib/regions";
 
@@ -92,11 +93,20 @@ const getShapeStyle = (
   }
 };
 
-const RegionLayer = ({ shape }: { shape: RegionShape }) => {
+const getShapeKey = (shape: RegionShape) => `${shape.region}-${shape.kind}`;
+
+type RegionLayerProps = {
+  shape: RegionShape;
+  onLayer: (layer: Path | null) => void;
+  onAdd: () => void;
+};
+
+const RegionLayer = ({ shape, onLayer, onAdd }: RegionLayerProps) => {
   const { state, dispatch } = usePlanner();
   const layerRef = useRef<Path | null>(null);
   const setLayer = (layer: Path | null) => {
     layerRef.current = layer;
+    onLayer(layer);
   };
 
   // A permanent tooltip keeps the position it opened at; reopening it
@@ -107,10 +117,8 @@ const RegionLayer = ({ shape }: { shape: RegionShape }) => {
   }, [shape]);
 
   const pathOptions = getShapeStyle(shape, state.editingRegion);
-  // Points share the canvas with shapes; keeping shapes at the back keeps
-  // points on top for drawing and click hit-testing.
   const eventHandlers: LeafletEventHandlerFnMap = {
-    add: (event) => (event.target as Path).bringToBack(),
+    add: onAdd,
     click: (event) => {
       DomEvent.stopPropagation(event);
       if (state.editingRegion !== shape.region) {
@@ -118,11 +126,12 @@ const RegionLayer = ({ shape }: { shape: RegionShape }) => {
       }
     },
   };
-  const tooltip = (
-    <Tooltip permanent direction="center">
-      {getRegionLabel(shape.region)}
-    </Tooltip>
-  );
+  const tooltip =
+    state.editingRegion === shape.region ? (
+      <Tooltip permanent direction="center">
+        {getRegionLabel(shape.region)}
+      </Tooltip>
+    ) : null;
 
   switch (shape.kind) {
     case "polygon":
@@ -168,6 +177,31 @@ const MapView = () => {
     () => getRegionShapes(clients, state.assignments),
     [clients, state.assignments],
   );
+  const regionLayersRef = useRef(
+    new Map<string, { shape: RegionShape; layer: Path }>(),
+  );
+  const orderScheduledRef = useRef(false);
+
+  // The canvas hit test picks the last-drawn layer, so smaller regions go in
+  // front of larger ones and receive clicks on overlaps; `bringToBack` also
+  // keeps every region behind the points. Deferring to a microtask also
+  // covers layers re-added later in the same commit (e.g. StrictMode
+  // remounts), which would otherwise land on top.
+  const scheduleRegionOrder = () => {
+    if (orderScheduledRef.current) return;
+    orderScheduledRef.current = true;
+    queueMicrotask(() => {
+      orderScheduledRef.current = false;
+      const entries = [...regionLayersRef.current.values()].sort(
+        (a, b) => getShapeArea(a.shape) - getShapeArea(b.shape),
+      );
+      for (const { layer } of entries) layer.bringToBack();
+    });
+  };
+
+  useEffect(() => {
+    scheduleRegionOrder();
+  });
 
   return (
     // `isolate` keeps Leaflet's high z-index panes from covering dialogs.
@@ -182,7 +216,18 @@ const MapView = () => {
         url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       {shapes.map((shape) => (
-        <RegionLayer key={`${shape.region}-${shape.kind}`} shape={shape} />
+        <RegionLayer
+          key={getShapeKey(shape)}
+          shape={shape}
+          onLayer={(layer) => {
+            if (layer) {
+              regionLayersRef.current.set(getShapeKey(shape), { shape, layer });
+            } else {
+              regionLayersRef.current.delete(getShapeKey(shape));
+            }
+          }}
+          onAdd={scheduleRegionOrder}
+        />
       ))}
       {clients.map((client) => {
         const region = state.assignments.get(client.rowIndex);

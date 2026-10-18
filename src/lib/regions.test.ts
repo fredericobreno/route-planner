@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Client } from "./planner";
-import { getRegionColor, getRegionLabel, getRegionShapes } from "./regions";
+import {
+  getRegionColor,
+  getRegionLabel,
+  getRegionShapes,
+  getShapeArea,
+  type RegionShape,
+} from "./regions";
 
 const toClients = (positions: [number, number][]): Client[] =>
   positions.map(([lat, lng], rowIndex) => ({ rowIndex, lat, lng }));
@@ -133,5 +139,58 @@ describe("getRegionColor", () => {
 describe("getRegionLabel", () => {
   it("formats the region number", () => {
     expect(getRegionLabel(3)).toBe("Região 3");
+  });
+});
+
+describe("getShapeArea", () => {
+  const polygon = (positions: [number, number][]): RegionShape => ({
+    region: 1,
+    color: getRegionColor(1),
+    kind: "polygon",
+    positions,
+  });
+  const unitSquare: [number, number][] = [
+    [0, 0],
+    [0, 1],
+    [1, 1],
+    [1, 0],
+    [0, 0],
+  ];
+
+  it("returns the area of a closed ring", () => {
+    expect(getShapeArea(polygon(unitSquare))).toBe(1);
+  });
+
+  it("ignores the ring orientation", () => {
+    expect(getShapeArea(polygon(unitSquare.toReversed()))).toBe(1);
+  });
+
+  it("orders larger polygons after smaller ones", () => {
+    const bigSquare = polygon(
+      unitSquare.map(([lat, lng]): [number, number] => [lat * 2, lng * 2]),
+    );
+
+    expect(getShapeArea(bigSquare)).toBeGreaterThan(
+      getShapeArea(polygon(unitSquare)),
+    );
+  });
+
+  it("returns 0 for lines and points", () => {
+    const color = getRegionColor(1);
+
+    expect(
+      getShapeArea({
+        region: 1,
+        color,
+        kind: "line",
+        positions: [
+          [0, 0],
+          [1, 1],
+        ],
+      }),
+    ).toBe(0);
+    expect(
+      getShapeArea({ region: 1, color, kind: "point", position: [0, 0] }),
+    ).toBe(0);
   });
 });
