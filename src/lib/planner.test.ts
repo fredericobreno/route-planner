@@ -4,6 +4,7 @@ import {
   getClients,
   getFirstNonEmptyRowIndex,
   getPreviewRows,
+  getSummary,
   parseCoordinate,
   plannerReducer,
   renumberRegions,
@@ -262,5 +263,55 @@ describe("plannerReducer togglePoint", () => {
     expect(plannerReducer(state, { type: "togglePoint", rowIndex: 0 })).toBe(
       state,
     );
+  });
+});
+
+describe("getSummary", () => {
+  const clients = [0, 1, 2, 3, 4].map((rowIndex) => ({
+    rowIndex,
+    lat: 0,
+    lng: 0,
+  }));
+
+  it("counts clients per region and without region", () => {
+    const summary = getSummary(
+      clients,
+      new Map([
+        [0, 1],
+        [1, 1],
+        [2, 2],
+      ]),
+    );
+
+    expect(summary).toEqual({
+      regions: [
+        { region: 1, count: 2 },
+        { region: 2, count: 1 },
+      ],
+      unassigned: 2,
+    });
+    expect(
+      summary.regions.reduce((sum, { count }) => sum + count, 0) +
+        summary.unassigned,
+    ).toBe(clients.length);
+  });
+
+  it("ignores assignments of rows that are not clients", () => {
+    const summary = getSummary(
+      clients,
+      new Map([
+        [0, 1],
+        [99, 2],
+      ]),
+    );
+
+    expect(summary.regions).toEqual([{ region: 1, count: 1 }]);
+  });
+
+  it("returns every client as unassigned without assignments", () => {
+    expect(getSummary(clients, new Map())).toEqual({
+      regions: [],
+      unassigned: clients.length,
+    });
   });
 });

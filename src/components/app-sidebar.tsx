@@ -3,6 +3,7 @@ import EditingBanner from "@/components/editing-banner";
 import ExportButton from "@/components/export-button";
 import GroupingForm from "@/components/grouping-form";
 import SheetImport from "@/components/sheet-import";
+import SummaryCard from "@/components/summary-card";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +21,7 @@ const AppSidebar = () => (
       <SheetImport />
       <GroupingForm />
       <EditingBanner />
+      <SummaryCard />
     </SidebarContent>
     <SidebarFooter className="border-t p-4">
       <ExportButton />

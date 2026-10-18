@@ -196,3 +196,25 @@ export const togglePointAssignment = (
         : (renumbered.get(memberRowIndex) ?? null),
   };
 };
+
+export const getSummary = (
+  clients: Client[],
+  assignments: Map<number, number>,
+): { regions: { region: number; count: number }[]; unassigned: number } => {
+  const counts = new Map<number, number>();
+  let unassigned = 0;
+  for (const { rowIndex } of clients) {
+    const region = assignments.get(rowIndex);
+    if (region === undefined) {
+      unassigned++;
+    } else {
+      counts.set(region, (counts.get(region) ?? 0) + 1);
+    }
+  }
+  return {
+    regions: [...counts]
+      .sort(([a], [b]) => a - b)
+      .map(([region, count]) => ({ region, count })),
+    unassigned,
+  };
+};
