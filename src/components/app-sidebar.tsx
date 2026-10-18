@@ -1,4 +1,5 @@
 import { MapPinned } from "lucide-react";
+import EditingBanner from "@/components/editing-banner";
 import GroupingForm from "@/components/grouping-form";
 import SheetImport from "@/components/sheet-import";
 import {
@@ -16,6 +17,7 @@ const AppSidebar = () => (
     <SidebarContent>
       <SheetImport />
       <GroupingForm />
+      <EditingBanner />
     </SidebarContent>
   </Sidebar>
 );

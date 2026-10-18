@@ -81,7 +81,15 @@ export const plannerReducer = (
         editingRegion: null,
       };
     case "togglePoint":
-      return state;
+      if (state.editingRegion === null) return state;
+      return {
+        ...state,
+        ...togglePointAssignment(
+          state.assignments,
+          action.rowIndex,
+          state.editingRegion,
+        ),
+      };
     case "startEditing":
       return { ...state, editingRegion: action.region };
     case "stopEditing":
@@ -161,4 +169,30 @@ export const renumberRegions = (
       newNumbers.get(region) ?? region,
     ]),
   );
+};
+
+export const togglePointAssignment = (
+  assignments: Map<number, number>,
+  rowIndex: number,
+  editingRegion: number,
+): { assignments: Map<number, number>; editingRegion: number | null } => {
+  const next = new Map(assignments);
+  if (next.get(rowIndex) === editingRegion) {
+    next.delete(rowIndex);
+  } else {
+    next.set(rowIndex, editingRegion);
+  }
+
+  // Any row still in the edited region tells its number after renumbering.
+  const memberRowIndex = [...next].find(
+    ([, region]) => region === editingRegion,
+  )?.[0];
+  const renumbered = renumberRegions(next);
+  return {
+    assignments: renumbered,
+    editingRegion:
+      memberRowIndex === undefined
+        ? null
+        : (renumbered.get(memberRowIndex) ?? null),
+  };
 };

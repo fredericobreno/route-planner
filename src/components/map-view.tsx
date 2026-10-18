@@ -2,7 +2,9 @@
 
 import "leaflet/dist/leaflet.css";
 import {
+  DomEvent,
   type LatLngTuple,
+  type LeafletEventHandlerFnMap,
   latLngBounds,
   type Path,
   type PathOptions,
@@ -16,6 +18,7 @@ import {
   TileLayer,
   Tooltip,
   useMap,
+  useMapEvents,
 } from "react-leaflet";
 import { usePlanner } from "@/components/planner-provider";
 import type { Client } from "@/lib/planner";
@@ -44,29 +47,53 @@ const FitBounds = ({ clients }: { clients: Client[] }) => {
   return null;
 };
 
-// `weight: 24` and `radius: 12` are the 12 px screen buffer.
-const getShapeStyle = (shape: RegionShape): PathOptions => {
+const MapClickExit = () => {
+  const { state, dispatch } = usePlanner();
+
+  useMapEvents({
+    click: () => {
+      if (state.editingRegion !== null) dispatch({ type: "stopEditing" });
+    },
+  });
+
+  return null;
+};
+
+// `weight: 24` and `radius: 12` are the 12 px screen buffer, so lines and
+// points only change opacity when highlighted.
+const getShapeStyle = (
+  shape: RegionShape,
+  editingRegion: number | null,
+): PathOptions => {
+  const isEditing = editingRegion !== null;
+  const isEdited = editingRegion === shape.region;
   switch (shape.kind) {
     case "polygon":
-      return { color: shape.color, weight: 2, fillOpacity: 0.2 };
+      return {
+        color: shape.color,
+        weight: isEdited ? 4 : 2,
+        opacity: isEditing && !isEdited ? 0.4 : 1,
+        fillOpacity: isEdited ? 0.35 : isEditing ? 0.08 : 0.2,
+      };
     case "line":
       return {
         color: shape.color,
         weight: 24,
         lineCap: "round",
-        opacity: 0.35,
+        opacity: isEdited ? 0.6 : isEditing ? 0.15 : 0.35,
       };
     case "point":
       return {
         color: shape.color,
         weight: 0,
         fillColor: shape.color,
-        fillOpacity: 0.35,
+        fillOpacity: isEdited ? 0.6 : isEditing ? 0.15 : 0.35,
       };
   }
 };
 
 const RegionLayer = ({ shape }: { shape: RegionShape }) => {
+  const { state, dispatch } = usePlanner();
   const layerRef = useRef<Path | null>(null);
   const setLayer = (layer: Path | null) => {
     layerRef.current = layer;
@@ -79,11 +106,17 @@ const RegionLayer = ({ shape }: { shape: RegionShape }) => {
     layerRef.current?.openTooltip();
   }, [shape]);
 
-  const pathOptions = getShapeStyle(shape);
+  const pathOptions = getShapeStyle(shape, state.editingRegion);
   // Points share the canvas with shapes; keeping shapes at the back keeps
   // points on top for drawing and click hit-testing.
-  const eventHandlers = {
-    add: (event: { target: Path }) => event.target.bringToBack(),
+  const eventHandlers: LeafletEventHandlerFnMap = {
+    add: (event) => (event.target as Path).bringToBack(),
+    click: (event) => {
+      DomEvent.stopPropagation(event);
+      if (state.editingRegion !== shape.region) {
+        dispatch({ type: "startEditing", region: shape.region });
+      }
+    },
   };
   const tooltip = (
     <Tooltip permanent direction="center">
@@ -130,7 +163,7 @@ const RegionLayer = ({ shape }: { shape: RegionShape }) => {
 };
 
 const MapView = () => {
-  const { state, clients } = usePlanner();
+  const { state, dispatch, clients } = usePlanner();
   const shapes = useMemo(
     () => getRegionShapes(clients, state.assignments),
     [clients, state.assignments],
@@ -164,10 +197,19 @@ const MapView = () => {
               fillColor: region ? getRegionColor(region) : POINT_COLOR,
               fillOpacity: 0.9,
             }}
+            eventHandlers={{
+              click: (event) => {
+                DomEvent.stopPropagation(event);
+                if (state.editingRegion !== null) {
+                  dispatch({ type: "togglePoint", rowIndex: client.rowIndex });
+                }
+              },
+            }}
           />
         );
       })}
       <FitBounds clients={clients} />
+      <MapClickExit />
     </MapContainer>
   );
 };

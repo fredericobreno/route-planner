@@ -5,8 +5,10 @@ import {
   getFirstNonEmptyRowIndex,
   getPreviewRows,
   parseCoordinate,
+  plannerReducer,
   renumberRegions,
   type Sheet,
+  togglePointAssignment,
 } from "./planner";
 
 const buildSheet = (
@@ -180,5 +182,85 @@ describe("getPreviewRows", () => {
 
     expect(getPreviewRows(rows, 10)).toHaveLength(10);
     expect(getPreviewRows(rows)).toHaveLength(10);
+  });
+});
+
+describe("togglePointAssignment", () => {
+  const assignments = new Map([
+    [0, 1],
+    [1, 2],
+    [2, 3],
+    [3, 3],
+  ]);
+
+  it("removes a point of the edited region", () => {
+    const result = togglePointAssignment(assignments, 2, 3);
+
+    expect(result.assignments.has(2)).toBe(false);
+    expect(result.editingRegion).toBe(3);
+  });
+
+  it("adds an unassigned point to the edited region", () => {
+    const result = togglePointAssignment(assignments, 9, 3);
+
+    expect(result.assignments.get(9)).toBe(3);
+  });
+
+  it("moves a point from another region", () => {
+    const result = togglePointAssignment(assignments, 0, 2);
+
+    expect(result.assignments.get(0)).toBe(1);
+    expect(result.assignments.get(1)).toBe(1);
+    expect(result.editingRegion).toBe(1);
+  });
+
+  it("removes an emptied edited region and renumbers", () => {
+    const result = togglePointAssignment(assignments, 1, 2);
+
+    expect(result.assignments).toEqual(
+      new Map([
+        [0, 1],
+        [2, 2],
+        [3, 2],
+      ]),
+    );
+    expect(result.editingRegion).toBeNull();
+  });
+
+  it("renumbers the edited region when another region empties", () => {
+    const result = togglePointAssignment(assignments, 1, 3);
+
+    expect(result.assignments).toEqual(
+      new Map([
+        [0, 1],
+        [1, 2],
+        [2, 2],
+        [3, 2],
+      ]),
+    );
+    expect(result.editingRegion).toBe(2);
+  });
+
+  it("does not mutate the input", () => {
+    const input = new Map(assignments);
+
+    togglePointAssignment(input, 0, 3);
+
+    expect(input).toEqual(assignments);
+  });
+});
+
+describe("plannerReducer togglePoint", () => {
+  it("returns the same state when not editing", () => {
+    const state = {
+      sheet: null,
+      columnMapping: null,
+      assignments: new Map([[0, 1]]),
+      editingRegion: null,
+    };
+
+    expect(plannerReducer(state, { type: "togglePoint", rowIndex: 0 })).toBe(
+      state,
+    );
   });
 });
