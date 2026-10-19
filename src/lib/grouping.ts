@@ -1,6 +1,8 @@
 import type { Client } from "./planner";
 
 const MAX_ITERATIONS = 10;
+const MAX_SWAP_PASSES = 20;
+const SWAP_CANDIDATES = 6;
 
 const squaredDistance = (
   xs: Float64Array,
@@ -63,6 +65,107 @@ const pickInitialCentroids = (
   return { cx, cy };
 };
 
+const recomputeCentroids = (
+  xs: Float64Array,
+  ys: Float64Array,
+  assignment: Int32Array,
+  capacities: Int32Array,
+  cx: Float64Array,
+  cy: Float64Array,
+) => {
+  cx.fill(0);
+  cy.fill(0);
+  for (let i = 0; i < xs.length; i++) {
+    cx[assignment[i]] += xs[i];
+    cy[assignment[i]] += ys[i];
+  }
+  for (let c = 0; c < capacities.length; c++) {
+    cx[c] /= capacities[c];
+    cy[c] /= capacities[c];
+  }
+};
+
+// The greedy capacitated assignment pushes leftover clients into distant
+// groups, so groups overlap. Swapping pairs between nearby groups keeps the
+// sizes and removes those outliers.
+const swapBetweenGroups = (
+  xs: Float64Array,
+  ys: Float64Array,
+  assignment: Int32Array,
+  capacities: Int32Array,
+  cx: Float64Array,
+  cy: Float64Array,
+) => {
+  const n = xs.length;
+  const k = capacities.length;
+  const members: number[][] = Array.from({ length: k }, () => []);
+  for (let i = 0; i < n; i++) members[assignment[i]].push(i);
+  const candidates = new Int32Array(SWAP_CANDIDATES);
+  const candidateDistances = new Float64Array(SWAP_CANDIDATES);
+
+  for (let pass = 0; pass < MAX_SWAP_PASSES; pass++) {
+    let swapped = false;
+    for (let i = 0; i < n; i++) {
+      const own = assignment[i];
+      const ownDistance = squaredDistance(xs, ys, i, cx, cy, own);
+
+      // An improving swap needs one of the two clients to prefer the other
+      // group, so only groups closer than its own are worth checking.
+      let count = 0;
+      for (let c = 0; c < k; c++) {
+        if (c === own) continue;
+        const distance = squaredDistance(xs, ys, i, cx, cy, c);
+        if (distance >= ownDistance) continue;
+        if (
+          count === SWAP_CANDIDATES &&
+          distance >= candidateDistances[count - 1]
+        ) {
+          continue;
+        }
+        let position = count < SWAP_CANDIDATES ? count++ : count - 1;
+        while (position > 0 && candidateDistances[position - 1] > distance) {
+          candidates[position] = candidates[position - 1];
+          candidateDistances[position] = candidateDistances[position - 1];
+          position--;
+        }
+        candidates[position] = c;
+        candidateDistances[position] = distance;
+      }
+
+      for (let m = 0; m < count; m++) {
+        const other = candidates[m];
+        const otherMembers = members[other];
+        let bestGain = 0;
+        let bestPosition = -1;
+        for (let p = 0; p < otherMembers.length; p++) {
+          const j = otherMembers[p];
+          const gain =
+            ownDistance +
+            squaredDistance(xs, ys, j, cx, cy, other) -
+            candidateDistances[m] -
+            squaredDistance(xs, ys, j, cx, cy, own);
+          if (gain > bestGain) {
+            bestGain = gain;
+            bestPosition = p;
+          }
+        }
+        if (bestPosition === -1) continue;
+
+        const j = otherMembers[bestPosition];
+        const ownMembers = members[own];
+        otherMembers[bestPosition] = i;
+        ownMembers[ownMembers.indexOf(i)] = j;
+        assignment[i] = other;
+        assignment[j] = own;
+        swapped = true;
+        break;
+      }
+    }
+    if (!swapped) break;
+    recomputeCentroids(xs, ys, assignment, capacities, cx, cy);
+  }
+};
+
 export const groupClients = (
   clients: Client[],
   size: number,
@@ -122,17 +225,10 @@ export const groupClients = (
     }
     if (!changed) break;
 
-    cx.fill(0);
-    cy.fill(0);
-    for (let i = 0; i < n; i++) {
-      cx[assignment[i]] += xs[i];
-      cy[assignment[i]] += ys[i];
-    }
-    for (let c = 0; c < k; c++) {
-      cx[c] /= capacities[c];
-      cy[c] /= capacities[c];
-    }
+    recomputeCentroids(xs, ys, assignment, capacities, cx, cy);
   }
+
+  swapBetweenGroups(xs, ys, assignment, capacities, cx, cy);
 
   return new Map(
     clients.map(({ rowIndex }, i) => [rowIndex, assignment[i] + 1]),
