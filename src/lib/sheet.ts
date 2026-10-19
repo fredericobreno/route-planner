@@ -71,6 +71,15 @@ export const getColumnLabels = (headers: string[]): string[] => {
   });
 };
 
+export const getCellText = (
+  sheet: Sheet,
+  rowIndex: number,
+  column: number,
+): string =>
+  utils
+    .format_cell(sheet.worksheet[utils.encode_cell({ r: rowIndex, c: column })])
+    .trim();
+
 export const getExportFileName = (fileName: string) =>
   `${fileName.replace(/\.[^.]+$/, "")}-regioes.xlsx`;
 

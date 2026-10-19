@@ -3,6 +3,7 @@ import { read, utils, type WorkSheet, write } from "xlsx";
 import type { Sheet } from "./planner";
 import {
   buildExportWorksheet,
+  getCellText,
   getColumnLabels,
   getExportFileName,
   readSheet,
@@ -289,5 +290,33 @@ describe("buildExportWorksheet", () => {
       ["B", "abc", "-38,5", null],
       ["C", "-3,8", "-38,6", 2],
     ]);
+  });
+});
+
+describe("getCellText", () => {
+  const buildTextSheet = (rows: unknown[][]): Sheet => ({
+    fileName: "clientes.xlsx",
+    sheetName: "Dados",
+    worksheet: utils.aoa_to_sheet(rows),
+    rawRows: rows,
+    headerRowIndex: 0,
+  });
+
+  it("returns the formatted text of a cell", () => {
+    const sheet = buildTextSheet([["valor"], [1234.5]]);
+    sheet.worksheet.A2.z = "#,##0.00";
+    delete sheet.worksheet.A2.w;
+
+    expect(getCellText(sheet, 1, 0)).toBe("1,234.50");
+  });
+
+  it("returns plain strings trimmed", () => {
+    expect(getCellText(buildTextSheet([["nome"], ["  Ana  "]]), 1, 0)).toBe(
+      "Ana",
+    );
+  });
+
+  it("returns an empty string for a missing cell", () => {
+    expect(getCellText(buildTextSheet([["nome"], ["Ana"]]), 1, 3)).toBe("");
   });
 });

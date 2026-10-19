@@ -5,6 +5,7 @@ import { type ChangeEvent, useRef, useState } from "react";
 import ColumnMapping from "@/components/column-mapping";
 import HeaderRowDialog from "@/components/header-row-dialog";
 import { usePlanner } from "@/components/planner-provider";
+import TooltipColumns from "@/components/tooltip-columns";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -116,6 +117,7 @@ const SheetImport = () => {
               Alterar cabeçalho
             </Button>
             <ColumnMapping key={state.sheet.headerRowIndex} />
+            <TooltipColumns />
           </>
         )}
       </SidebarGroupContent>

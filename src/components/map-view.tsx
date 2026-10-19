@@ -21,7 +21,7 @@ import {
   useMapEvents,
 } from "react-leaflet";
 import { usePlanner } from "@/components/planner-provider";
-import type { Client } from "@/lib/planner";
+import type { Client, Sheet } from "@/lib/planner";
 import {
   getRegionColor,
   getRegionLabel,
@@ -29,6 +29,7 @@ import {
   getShapeArea,
   type RegionShape,
 } from "@/lib/regions";
+import { getCellText, getColumnLabels } from "@/lib/sheet";
 
 const BRAZIL_CENTER: LatLngTuple = [-14.235, -51.9253];
 // Canvas rendering cannot read CSS variables.
@@ -185,8 +186,30 @@ const RegionLayer = ({ shape, onLayer, onAdd }: RegionLayerProps) => {
   }
 };
 
+// Built with `textContent` so spreadsheet values are never parsed as HTML.
+const buildPointTooltip = (
+  sheet: Sheet,
+  rowIndex: number,
+  columns: number[],
+  labels: string[],
+) => {
+  const container = document.createElement("div");
+  container.className =
+    "flex w-max max-w-64 flex-col gap-0.5 whitespace-normal";
+  for (const column of columns) {
+    const line = document.createElement("div");
+    const label = document.createElement("span");
+    label.className = "font-medium";
+    label.textContent = `${labels[column]}: `;
+    line.append(label, getCellText(sheet, rowIndex, column) || "—");
+    container.append(line);
+  }
+  return container;
+};
+
 const MapView = () => {
-  const { state, dispatch, clients } = usePlanner();
+  const { state, dispatch, clients, headers } = usePlanner();
+  const columnLabels = useMemo(() => getColumnLabels(headers), [headers]);
   const shapes = useMemo(
     () => getRegionShapes(clients, state.assignments),
     [clients, state.assignments],
@@ -262,6 +285,23 @@ const MapView = () => {
                 if (state.editingRegion !== null) {
                   dispatch({ type: "togglePoint", rowIndex: client.rowIndex });
                 }
+              },
+              mouseover: (event) => {
+                if (!state.sheet || state.tooltipColumns.length === 0) return;
+                (event.target as Path)
+                  .bindTooltip(
+                    buildPointTooltip(
+                      state.sheet,
+                      client.rowIndex,
+                      state.tooltipColumns,
+                      columnLabels,
+                    ),
+                    { direction: "top", offset: [0, -6] },
+                  )
+                  .openTooltip();
+              },
+              mouseout: (event) => {
+                (event.target as Path).unbindTooltip();
               },
             }}
           />

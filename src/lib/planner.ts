@@ -29,12 +29,14 @@ export type PlannerState = {
   columnMapping: ColumnMapping | null;
   assignments: Map<number, number>;
   editingRegion: number | null;
+  tooltipColumns: number[];
 };
 
 export type PlannerAction =
   | { type: "loadSheet"; sheet: Sheet }
   | { type: "setHeaderRow"; index: number }
   | { type: "setColumnMapping"; mapping: ColumnMapping }
+  | { type: "setTooltipColumns"; columns: number[] }
   | { type: "reset" }
   | { type: "setGroups"; assignments: Map<number, number> }
   | { type: "togglePoint"; rowIndex: number }
@@ -46,6 +48,7 @@ export const createInitialState = (): PlannerState => ({
   columnMapping: null,
   assignments: new Map(),
   editingRegion: null,
+  tooltipColumns: [],
 });
 
 export const plannerReducer = (
@@ -63,6 +66,7 @@ export const plannerReducer = (
         columnMapping: null,
         assignments: new Map(),
         editingRegion: null,
+        tooltipColumns: [],
       };
     case "setColumnMapping":
       if (!state.sheet) return state;
@@ -72,6 +76,9 @@ export const plannerReducer = (
         assignments: new Map(),
         editingRegion: null,
       };
+    case "setTooltipColumns":
+      if (!state.sheet) return state;
+      return { ...state, tooltipColumns: action.columns };
     case "reset":
       return createInitialState();
     case "setGroups":

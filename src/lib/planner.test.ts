@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  createInitialState,
   getClientRows,
   getClients,
   getFirstNonEmptyRowIndex,
@@ -258,6 +259,7 @@ describe("plannerReducer togglePoint", () => {
       columnMapping: null,
       assignments: new Map([[0, 1]]),
       editingRegion: null,
+      tooltipColumns: [],
     };
 
     expect(plannerReducer(state, { type: "togglePoint", rowIndex: 0 })).toBe(
@@ -313,5 +315,47 @@ describe("getSummary", () => {
       regions: [],
       unassigned: clients.length,
     });
+  });
+});
+
+describe("plannerReducer tooltipColumns", () => {
+  const loaded = plannerReducer(createInitialState(), {
+    type: "loadSheet",
+    sheet: buildSheet([["nome", "lat", "lng"]], 0),
+  });
+
+  it("sets the tooltip columns", () => {
+    const state = plannerReducer(loaded, {
+      type: "setTooltipColumns",
+      columns: [0, 2],
+    });
+
+    expect(state.tooltipColumns).toEqual([0, 2]);
+  });
+
+  it("ignores tooltip columns without a sheet", () => {
+    const state = createInitialState();
+
+    expect(
+      plannerReducer(state, { type: "setTooltipColumns", columns: [0] }),
+    ).toBe(state);
+  });
+
+  it("clears tooltip columns when the header row changes", () => {
+    const state = plannerReducer(
+      plannerReducer(loaded, { type: "setTooltipColumns", columns: [0] }),
+      { type: "setHeaderRow", index: 0 },
+    );
+
+    expect(state.tooltipColumns).toEqual([]);
+  });
+
+  it("keeps tooltip columns when the column mapping changes", () => {
+    const state = plannerReducer(
+      plannerReducer(loaded, { type: "setTooltipColumns", columns: [0] }),
+      { type: "setColumnMapping", mapping: { latColumn: 1, lngColumn: 2 } },
+    );
+
+    expect(state.tooltipColumns).toEqual([0]);
   });
 });
