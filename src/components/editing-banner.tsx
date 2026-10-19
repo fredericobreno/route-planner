@@ -4,7 +4,13 @@ import { Check } from "lucide-react";
 import { useEffect } from "react";
 import { usePlanner } from "@/components/planner-provider";
 import { Button } from "@/components/ui/button";
-import { SidebarGroup, SidebarGroupContent } from "@/components/ui/sidebar";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { getRegionColor, getRegionLabel } from "@/lib/regions";
 
 const EditingBanner = () => {
@@ -23,19 +29,21 @@ const EditingBanner = () => {
   if (editingRegion === null) return null;
 
   return (
-    <SidebarGroup>
-      <SidebarGroupContent className="flex flex-col gap-3 rounded-lg border bg-background p-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
+    <Card size="sm" className="shadow-lg">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
           <span
             className="size-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: getRegionColor(editingRegion) }}
           />
           Editando {getRegionLabel(editingRegion)}
-        </div>
-        <p className="text-xs text-muted-foreground">
+        </CardTitle>
+        <CardDescription className="text-xs">
           Clique em um ponto da região para removê-lo, ou em outro ponto para
           adicioná-lo.
-        </p>
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
         <Button
           size="sm"
           className="w-full"
@@ -44,8 +52,8 @@ const EditingBanner = () => {
           <Check />
           Concluir
         </Button>
-      </SidebarGroupContent>
-    </SidebarGroup>
+      </CardContent>
+    </Card>
   );
 };
 

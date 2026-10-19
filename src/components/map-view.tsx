@@ -48,6 +48,20 @@ const FitBounds = ({ clients }: { clients: Client[] }) => {
   return null;
 };
 
+// Leaflet only tracks window resizes; the sidebar collapsing resizes the map
+// container without one.
+const InvalidateSizeOnResize = () => {
+  const map = useMap();
+
+  useEffect(() => {
+    const observer = new ResizeObserver(() => map.invalidateSize());
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
+
+  return null;
+};
+
 const MapClickExit = () => {
   const { state, dispatch } = usePlanner();
 
@@ -255,6 +269,7 @@ const MapView = () => {
       })}
       <FitBounds clients={clients} />
       <MapClickExit />
+      <InvalidateSizeOnResize />
     </MapContainer>
   );
 };

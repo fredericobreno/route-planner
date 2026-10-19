@@ -187,7 +187,7 @@ describe("buildExportWorksheet", () => {
     const worksheet = buildExportWorksheet(sheet, new Map([[3, 1]]));
 
     expect(worksheet.D3.v).toBe("Região");
-    expect(worksheet.D4.v).toBe("Região 1");
+    expect(worksheet.D4.v).toBe(1);
     expect(worksheet.D5).toBeUndefined();
     expect(worksheet.D6).toBeUndefined();
     expect(worksheet.D1).toBeUndefined();
@@ -208,7 +208,7 @@ describe("buildExportWorksheet", () => {
 
     expect(worksheet.B3.v).toBe("Região");
     expect(worksheet.B4).toBeUndefined();
-    expect(worksheet.B5.v).toBe("Região 2");
+    expect(worksheet.B5.v).toBe(2);
     expect(worksheet.D3).toBeUndefined();
     expect(worksheet["!ref"]).toBe("A1:C5");
   });
@@ -285,9 +285,9 @@ describe("buildExportWorksheet", () => {
       ["Relatório", null, null, null],
       [null, null, null, null],
       ["nome", "lat", "lng", "Região"],
-      ["A", "-3,7", "-38,5", "Região 1"],
+      ["A", "-3,7", "-38,5", 1],
       ["B", "abc", "-38,5", null],
-      ["C", "-3,8", "-38,6", "Região 2"],
+      ["C", "-3,8", "-38,6", 2],
     ]);
   });
 });

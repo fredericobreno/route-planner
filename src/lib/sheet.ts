@@ -1,6 +1,5 @@
 import { read, utils, type WorkBook, type WorkSheet, writeFile } from "xlsx";
 import { getFirstNonEmptyRowIndex, isEmptyRow, type Sheet } from "./planner";
-import { getRegionLabel } from "./regions";
 
 const READ_ERROR = "Não foi possível ler o arquivo.";
 const EMPTY_ERROR = "O arquivo está vazio.";
@@ -110,7 +109,7 @@ export const buildExportWorksheet = (
     if (region === undefined) {
       delete worksheet[address];
     } else {
-      worksheet[address] = { t: "s", v: getRegionLabel(region) };
+      worksheet[address] = { t: "n", v: region };
     }
   }
 
