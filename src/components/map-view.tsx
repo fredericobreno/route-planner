@@ -284,6 +284,8 @@ const MapView = () => {
                 DomEvent.stopPropagation(event);
                 if (state.editingRegion !== null) {
                   dispatch({ type: "togglePoint", rowIndex: client.rowIndex });
+                } else if (region === undefined) {
+                  dispatch({ type: "createRegion", rowIndex: client.rowIndex });
                 }
               },
               mouseover: (event) => {

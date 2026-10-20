@@ -268,6 +268,60 @@ describe("plannerReducer togglePoint", () => {
   });
 });
 
+describe("plannerReducer createRegion", () => {
+  const createState = (
+    assignments: Map<number, number>,
+    editingRegion: number | null = null,
+  ) => ({
+    sheet: null,
+    columnMapping: null,
+    assignments,
+    editingRegion,
+    tooltipColumns: [],
+  });
+
+  it("creates the next region with the point and starts editing it", () => {
+    const state = createState(
+      new Map([
+        [0, 1],
+        [1, 2],
+      ]),
+    );
+
+    const next = plannerReducer(state, { type: "createRegion", rowIndex: 5 });
+
+    expect(next.assignments.get(5)).toBe(3);
+    expect(next.editingRegion).toBe(3);
+    expect(state.assignments.has(5)).toBe(false);
+  });
+
+  it("creates region 1 when there are no regions", () => {
+    const next = plannerReducer(createState(new Map()), {
+      type: "createRegion",
+      rowIndex: 5,
+    });
+
+    expect(next.assignments).toEqual(new Map([[5, 1]]));
+    expect(next.editingRegion).toBe(1);
+  });
+
+  it("ignores points that already have a region", () => {
+    const state = createState(new Map([[0, 1]]));
+
+    expect(plannerReducer(state, { type: "createRegion", rowIndex: 0 })).toBe(
+      state,
+    );
+  });
+
+  it("ignores the action while editing", () => {
+    const state = createState(new Map([[0, 1]]), 1);
+
+    expect(plannerReducer(state, { type: "createRegion", rowIndex: 5 })).toBe(
+      state,
+    );
+  });
+});
+
 describe("getSummary", () => {
   const clients = [0, 1, 2, 3, 4].map((rowIndex) => ({
     rowIndex,

@@ -40,6 +40,7 @@ export type PlannerAction =
   | { type: "reset" }
   | { type: "setGroups"; assignments: Map<number, number> }
   | { type: "togglePoint"; rowIndex: number }
+  | { type: "createRegion"; rowIndex: number }
   | { type: "startEditing"; region: number }
   | { type: "stopEditing" };
 
@@ -97,6 +98,20 @@ export const plannerReducer = (
           state.editingRegion,
         ),
       };
+    case "createRegion": {
+      if (
+        state.editingRegion !== null ||
+        state.assignments.has(action.rowIndex)
+      ) {
+        return state;
+      }
+      const region = Math.max(0, ...state.assignments.values()) + 1;
+      return {
+        ...state,
+        assignments: new Map(state.assignments).set(action.rowIndex, region),
+        editingRegion: region,
+      };
+    }
     case "startEditing":
       return { ...state, editingRegion: action.region };
     case "stopEditing":
