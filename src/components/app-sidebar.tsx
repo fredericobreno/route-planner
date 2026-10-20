@@ -2,6 +2,7 @@ import { MapPinned } from "lucide-react";
 import ExportButton from "@/components/export-button";
 import GroupingForm from "@/components/grouping-form";
 import SheetImport from "@/components/sheet-import";
+import SignOutButton from "@/components/sign-out-button";
 import {
   Sidebar,
   SidebarContent,
@@ -21,6 +22,7 @@ const AppSidebar = () => (
     </SidebarContent>
     <SidebarFooter className="border-t p-4">
       <ExportButton />
+      <SignOutButton />
     </SidebarFooter>
   </Sidebar>
 );
