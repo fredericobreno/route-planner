@@ -76,15 +76,15 @@ describe("renumberRegions", () => {
 
 describe("parseCoordinate", () => {
   it("converts a decimal comma to a point", () => {
-    expect(parseCoordinate("-3,7319", 90)).toBe(-3.7319);
+    expect(parseCoordinate("-3,7319", "lat")).toBe(-3.7319);
   });
 
   it("trims surrounding spaces", () => {
-    expect(parseCoordinate(" 12.5 ", 90)).toBe(12.5);
+    expect(parseCoordinate(" 12.5 ", "lat")).toBe(12.5);
   });
 
   it("accepts numeric values", () => {
-    expect(parseCoordinate(-38.5, 180)).toBe(-38.5);
+    expect(parseCoordinate(-38.5, "lng")).toBe(-38.5);
   });
 
   it.each([
@@ -93,22 +93,40 @@ describe("parseCoordinate", () => {
     null,
     undefined,
   ])("returns null for empty %j", (value) => {
-    expect(parseCoordinate(value, 90)).toBeNull();
+    expect(parseCoordinate(value, "lat")).toBeNull();
   });
 
   it("returns null for non-numeric values", () => {
-    expect(parseCoordinate("abc", 90)).toBeNull();
+    expect(parseCoordinate("abc", "lat")).toBeNull();
   });
 
   it("applies the latitude limit", () => {
-    expect(parseCoordinate(90, 90)).toBe(90);
-    expect(parseCoordinate(-90, 90)).toBe(-90);
-    expect(parseCoordinate(90.0001, 90)).toBeNull();
+    expect(parseCoordinate(90, "lat")).toBe(90);
+    expect(parseCoordinate(-90, "lat")).toBe(-90);
+    expect(parseCoordinate(90.0001, "lat")).toBeNull();
   });
 
   it("applies the longitude limit", () => {
-    expect(parseCoordinate(180, 180)).toBe(180);
-    expect(parseCoordinate(-180.1, 180)).toBeNull();
+    expect(parseCoordinate(180, "lng")).toBe(180);
+    expect(parseCoordinate(-180.1, "lng")).toBeNull();
+  });
+
+  it("restores the decimal point from thousand-separated text", () => {
+    expect(parseCoordinate("-3.731.912", "lat")).toBe(-3.731912);
+    expect(parseCoordinate("-38.523.456", "lng")).toBe(-38.523456);
+    expect(parseCoordinate("-23.550.520", "lat")).toBe(-23.55052);
+  });
+
+  it("restores the decimal point from numbers that lost it", () => {
+    expect(parseCoordinate(-3731912, "lat")).toBe(-3.731912);
+    expect(parseCoordinate(-385234567, "lng")).toBe(-38.5234567);
+    expect(parseCoordinate(2345678, "lat")).toBe(2.345678);
+  });
+
+  it("returns null when no decimal point falls inside Brazil", () => {
+    expect(parseCoordinate(95, "lat")).toBeNull();
+    expect(parseCoordinate(-200, "lng")).toBeNull();
+    expect(parseCoordinate("38.523.456", "lng")).toBeNull();
   });
 });
 

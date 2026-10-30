@@ -136,14 +136,48 @@ export const getPreviewRows = (rows: unknown[][], limit = 10): ClientRow[] =>
     .filter(({ cells }) => !isEmptyRow(cells))
     .slice(0, limit);
 
+// `min`/`max` are Brazil's bounding box, used only to restore a lost decimal point.
+const COORDINATE_BOUNDS = {
+  lat: { limit: 90, min: -33.8, max: 5.3 },
+  lng: { limit: 180, min: -74, max: -34.8 },
+};
+
+type CoordinateAxis = keyof typeof COORDINATE_BOUNDS;
+
+// A number-formatted column turns "-3.731912" into -3731912 (shown as
+// "-3.731.912"), so the digits are kept and the point is placed where the
+// value falls inside Brazil, preferring two integer digits when both fit.
+const restoreDecimalPoint = (
+  text: string,
+  { min, max }: { min: number; max: number },
+): number | null => {
+  const digits = text.replace(/\D/g, "");
+  const sign = text.startsWith("-") ? -1 : 1;
+  for (const integerDigits of [2, 1]) {
+    const number =
+      sign *
+      Number(
+        `${digits.slice(0, integerDigits)}.${digits.slice(integerDigits)}`,
+      );
+    if (number >= min && number <= max) return number;
+  }
+  return null;
+};
+
 export const parseCoordinate = (
   value: unknown,
-  limit: number,
+  axis: CoordinateAxis,
 ): number | null => {
   if (isEmptyCell(value)) return null;
-  const number = Number(String(value).trim().replace(",", "."));
-  if (!Number.isFinite(number) || number < -limit || number > limit) {
-    return null;
+  const bounds = COORDINATE_BOUNDS[axis];
+  const text = String(value).trim();
+  const number = Number(text.replace(",", "."));
+  if (
+    !Number.isFinite(number) ||
+    number < -bounds.limit ||
+    number > bounds.limit
+  ) {
+    return restoreDecimalPoint(text, bounds);
   }
   return number;
 };
@@ -155,8 +189,8 @@ export const getClients = (
   const clients: Client[] = [];
   const invalidRowIndexes: number[] = [];
   for (const { rowIndex, cells } of rows) {
-    const lat = parseCoordinate(cells[mapping.latColumn], 90);
-    const lng = parseCoordinate(cells[mapping.lngColumn], 180);
+    const lat = parseCoordinate(cells[mapping.latColumn], "lat");
+    const lng = parseCoordinate(cells[mapping.lngColumn], "lng");
     if (lat === null || lng === null) {
       invalidRowIndexes.push(rowIndex);
     } else {
