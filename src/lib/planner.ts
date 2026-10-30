@@ -1,4 +1,4 @@
-import type { WorkSheet } from "xlsx";
+import { type CellObject, utils, type WorkSheet } from "xlsx";
 
 export type Sheet = {
   fileName: string;
@@ -24,6 +24,9 @@ export type ClientRow = {
   cells: unknown[];
 };
 
+// Column index → new cell; `null` clears the cell.
+export type CellUpdates = Map<number, CellObject | null>;
+
 export type PlannerState = {
   sheet: Sheet | null;
   columnMapping: ColumnMapping | null;
@@ -42,7 +45,8 @@ export type PlannerAction =
   | { type: "togglePoint"; rowIndex: number }
   | { type: "createRegion"; rowIndex: number }
   | { type: "startEditing"; region: number }
-  | { type: "stopEditing" };
+  | { type: "stopEditing" }
+  | { type: "updateCells"; rowIndex: number; cells: CellUpdates };
 
 export const createInitialState = (): PlannerState => ({
   sheet: null,
@@ -116,7 +120,40 @@ export const plannerReducer = (
       return { ...state, editingRegion: action.region };
     case "stopEditing":
       return { ...state, editingRegion: null };
+    case "updateCells":
+      if (!state.sheet) return state;
+      return {
+        ...state,
+        sheet: updateSheetCells(state.sheet, action.rowIndex, action.cells),
+      };
   }
+};
+
+// Writes to both `worksheet` (tooltips, export) and `rawRows` (points) so
+// they stay in sync; the previous sheet is left untouched.
+export const updateSheetCells = (
+  sheet: Sheet,
+  rowIndex: number,
+  cells: CellUpdates,
+): Sheet => {
+  const worksheet: WorkSheet = { ...sheet.worksheet };
+  const row = [...(sheet.rawRows[rowIndex] ?? [])];
+  for (const [column, cell] of cells) {
+    const address = utils.encode_cell({ r: rowIndex, c: column });
+    if (cell) {
+      worksheet[address] = cell;
+    } else {
+      delete worksheet[address];
+    }
+    row[column] = cell?.v ?? null;
+  }
+  return {
+    ...sheet,
+    worksheet,
+    rawRows: sheet.rawRows.map((cells, i) =>
+      i === rowIndex ? Array.from(row, (cell) => cell ?? null) : cells,
+    ),
+  };
 };
 
 const isEmptyCell = (cell: unknown) =>

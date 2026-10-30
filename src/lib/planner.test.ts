@@ -431,3 +431,121 @@ describe("plannerReducer tooltipColumns", () => {
     expect(state.tooltipColumns).toEqual([0]);
   });
 });
+
+describe("plannerReducer updateCells", () => {
+  const buildEditableSheet = (): Sheet => ({
+    ...buildSheet(
+      [
+        ["nome", "lat", "lng"],
+        ["A", "-3,7", "-38,5"],
+        ["B", "-3,8", "-38,6"],
+      ],
+      0,
+    ),
+    worksheet: {
+      A2: { t: "s", v: "A" },
+      B2: { t: "s", v: "-3,7" },
+      C2: { t: "s", v: "-38,5" },
+    },
+  });
+
+  const loaded = plannerReducer(
+    plannerReducer(createInitialState(), {
+      type: "loadSheet",
+      sheet: buildEditableSheet(),
+    }),
+    { type: "setColumnMapping", mapping: { latColumn: 1, lngColumn: 2 } },
+  );
+
+  it("updates rawRows and worksheet", () => {
+    const state = plannerReducer(loaded, {
+      type: "updateCells",
+      rowIndex: 1,
+      cells: new Map([
+        [0, { t: "s", v: "Ana" }],
+        [1, { t: "n", v: -3.75 }],
+      ]),
+    });
+
+    expect(state.sheet?.rawRows[1]).toEqual(["Ana", -3.75, "-38,5"]);
+    expect(state.sheet?.rawRows[2]).toBe(loaded.sheet?.rawRows[2]);
+    expect(state.sheet?.worksheet.A2).toEqual({ t: "s", v: "Ana" });
+    expect(state.sheet?.worksheet.B2).toEqual({ t: "n", v: -3.75 });
+    expect(
+      getClients(getClientRows(state.sheet as Sheet), {
+        latColumn: 1,
+        lngColumn: 2,
+      }).clients[0],
+    ).toEqual({ rowIndex: 1, lat: -3.75, lng: -38.5 });
+  });
+
+  it("clears a cell set to null", () => {
+    const state = plannerReducer(loaded, {
+      type: "updateCells",
+      rowIndex: 1,
+      cells: new Map([[0, null]]),
+    });
+
+    expect(state.sheet?.rawRows[1]).toEqual([null, "-3,7", "-38,5"]);
+    expect(state.sheet?.worksheet.A2).toBeUndefined();
+  });
+
+  it("fills skipped columns with null", () => {
+    const state = plannerReducer(loaded, {
+      type: "updateCells",
+      rowIndex: 1,
+      cells: new Map([[4, { t: "s", v: "extra" }]]),
+    });
+
+    expect(state.sheet?.rawRows[1]).toEqual([
+      "A",
+      "-3,7",
+      "-38,5",
+      null,
+      "extra",
+    ]);
+  });
+
+  it("leaves the previous sheet untouched", () => {
+    plannerReducer(loaded, {
+      type: "updateCells",
+      rowIndex: 1,
+      cells: new Map([[0, { t: "s", v: "Ana" }]]),
+    });
+
+    expect(loaded.sheet?.rawRows[1][0]).toBe("A");
+    expect(loaded.sheet?.worksheet.A2.v).toBe("A");
+  });
+
+  it("keeps regions, editing and column mapping", () => {
+    const grouped = {
+      ...plannerReducer(loaded, {
+        type: "setGroups",
+        assignments: new Map([[1, 1]]),
+      }),
+      editingRegion: 1,
+    };
+
+    const state = plannerReducer(grouped, {
+      type: "updateCells",
+      rowIndex: 1,
+      cells: new Map([[0, { t: "s", v: "Ana" }]]),
+    });
+
+    expect(state.assignments).toEqual(new Map([[1, 1]]));
+    expect(state.editingRegion).toBe(1);
+    expect(state.columnMapping).toEqual({ latColumn: 1, lngColumn: 2 });
+  });
+
+  it("ignores updates without a sheet", () => {
+    const state = createInitialState();
+
+    expect(
+      plannerReducer(state, {
+        type: "updateCells",
+        rowIndex: 1,
+        cells: new Map([[0, null]]),
+      }),
+    ).toBe(state);
+  });
+});

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { read, utils, type WorkSheet, write } from "xlsx";
-import type { Sheet } from "./planner";
+import { type Sheet, updateSheetCells } from "./planner";
 import {
+  buildEditedCell,
   buildExportWorksheet,
   getCellText,
   getColumnLabels,
+  getEditableText,
   getExportFileName,
   readSheet,
 } from "./sheet";
@@ -318,5 +320,96 @@ describe("getCellText", () => {
 
   it("returns an empty string for a missing cell", () => {
     expect(getCellText(buildTextSheet([["nome"], ["Ana"]]), 1, 3)).toBe("");
+  });
+});
+
+describe("getEditableText", () => {
+  const buildTextSheet = (rows: unknown[][]): Sheet => ({
+    fileName: "clientes.xlsx",
+    sheetName: "Dados",
+    worksheet: utils.aoa_to_sheet(rows),
+    rawRows: rows,
+    headerRowIndex: 0,
+  });
+
+  it("returns the raw value of a formatted number", () => {
+    const sheet = buildTextSheet([["valor"], [-3731912]]);
+    sheet.worksheet.A2.z = "#,##0";
+
+    expect(getEditableText(sheet, 1, 0)).toBe("-3731912");
+  });
+
+  it("returns the formatted text of a date", () => {
+    const sheet = buildTextSheet([["data"], [45306]]);
+    sheet.worksheet.A2.z = "dd/mm/yyyy";
+
+    expect(getEditableText(sheet, 1, 0)).toBe("15/01/2024");
+  });
+
+  it("returns text cells as they are", () => {
+    expect(getEditableText(buildTextSheet([["lat"], ["-3,7319"]]), 1, 0)).toBe(
+      "-3,7319",
+    );
+  });
+});
+
+describe("buildEditedCell", () => {
+  it("keeps a number cell a number with its format", () => {
+    expect(buildEditedCell({ t: "n", v: 1, z: "0.00" }, "2,5")).toEqual({
+      t: "n",
+      v: 2.5,
+      z: "0.00",
+    });
+  });
+
+  it("keeps a text cell text even when it looks like a number", () => {
+    expect(buildEditedCell({ t: "s", v: "85" }, " 85999999999 ")).toEqual({
+      t: "s",
+      v: "85999999999",
+    });
+  });
+
+  it("stores non-numeric text in a number cell as text", () => {
+    expect(buildEditedCell({ t: "n", v: 1 }, "abc")).toEqual({
+      t: "s",
+      v: "abc",
+    });
+  });
+
+  it("creates a text cell when there was none", () => {
+    expect(buildEditedCell(undefined, "Ana")).toEqual({ t: "s", v: "Ana" });
+  });
+
+  it("clears the cell when the text is empty", () => {
+    expect(buildEditedCell({ t: "s", v: "Ana" }, "  ")).toBeNull();
+  });
+});
+
+describe("export after editing", () => {
+  it("writes the edited cells", () => {
+    const rows = [
+      ["nome", "lat", "lng"],
+      ["A", "-3,7", "-38,5"],
+    ];
+    const sheet = updateSheetCells(
+      {
+        fileName: "clientes.xlsx",
+        sheetName: "Dados",
+        worksheet: utils.aoa_to_sheet(rows),
+        rawRows: rows,
+        headerRowIndex: 0,
+      },
+      1,
+      new Map([
+        [0, { t: "s", v: "Ana" }],
+        [1, { t: "n", v: -3.75 }],
+      ]),
+    );
+
+    const worksheet = buildExportWorksheet(sheet, new Map([[1, 1]]));
+
+    expect(worksheet.A2.v).toBe("Ana");
+    expect(worksheet.B2).toEqual({ t: "n", v: -3.75 });
+    expect(worksheet.D2.v).toBe(1);
   });
 });

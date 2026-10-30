@@ -1,4 +1,12 @@
-import { read, utils, type WorkBook, type WorkSheet, writeFile } from "xlsx";
+import {
+  type CellObject,
+  read,
+  SSF,
+  utils,
+  type WorkBook,
+  type WorkSheet,
+  writeFile,
+} from "xlsx";
 import { getFirstNonEmptyRowIndex, isEmptyRow, type Sheet } from "./planner";
 
 const READ_ERROR = "Não foi possível ler o arquivo.";
@@ -71,14 +79,52 @@ export const getColumnLabels = (headers: string[]): string[] => {
   });
 };
 
+export const getCell = (
+  sheet: Sheet,
+  rowIndex: number,
+  column: number,
+): CellObject | undefined =>
+  sheet.worksheet[utils.encode_cell({ r: rowIndex, c: column })];
+
 export const getCellText = (
   sheet: Sheet,
   rowIndex: number,
   column: number,
-): string =>
-  utils
-    .format_cell(sheet.worksheet[utils.encode_cell({ r: rowIndex, c: column })])
-    .trim();
+): string => {
+  const cell = getCell(sheet, rowIndex, column);
+  return cell ? utils.format_cell(cell).trim() : "";
+};
+
+// Numbers show their raw value so editing does not round-trip through a
+// display format such as "1,234.50"; dates keep their formatted text.
+export const getEditableText = (
+  sheet: Sheet,
+  rowIndex: number,
+  column: number,
+): string => {
+  const cell = getCell(sheet, rowIndex, column);
+  if (cell?.t === "n" && !(cell.z && SSF.is_date(cell.z))) {
+    return String(cell.v);
+  }
+  return getCellText(sheet, rowIndex, column);
+};
+
+// Only cells that were numbers stay numbers (keeping their format), so text
+// such as phone numbers is never converted.
+export const buildEditedCell = (
+  original: CellObject | undefined,
+  text: string,
+): CellObject | null => {
+  const value = text.trim();
+  if (value === "") return null;
+  const number = Number(value.replace(",", "."));
+  if (original?.t === "n" && Number.isFinite(number)) {
+    return original.z !== undefined
+      ? { t: "n", v: number, z: original.z }
+      : { t: "n", v: number };
+  }
+  return { t: "s", v: value };
+};
 
 export const getExportFileName = (fileName: string) =>
   `${fileName.replace(/\.[^.]+$/, "")}-regioes.xlsx`;

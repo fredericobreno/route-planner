@@ -3,26 +3,33 @@
 import "leaflet/dist/leaflet.css";
 import {
   DomEvent,
+  divIcon,
   type LatLngTuple,
   type LeafletEventHandlerFnMap,
+  type Marker as LeafletMarker,
   latLngBounds,
   type Path,
   type PathOptions,
 } from "leaflet";
-import { useEffect, useMemo, useRef } from "react";
+import { Move, Pencil } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CircleMarker,
   LayersControl,
   MapContainer,
+  Marker,
   Polygon,
   Polyline,
+  Popup,
   TileLayer,
   Tooltip,
   useMap,
   useMapEvents,
 } from "react-leaflet";
 import { usePlanner } from "@/components/planner-provider";
-import type { Client, Sheet } from "@/lib/planner";
+import RowEditDialog from "@/components/row-edit-dialog";
+import { Button } from "@/components/ui/button";
+import type { Client, ColumnMapping, Sheet } from "@/lib/planner";
 import {
   getRegionColor,
   getRegionLabel,
@@ -35,17 +42,32 @@ import { getCellText, getColumnLabels } from "@/lib/sheet";
 const BRAZIL_CENTER: LatLngTuple = [-14.235, -51.9253];
 // Canvas rendering cannot read CSS variables.
 const POINT_COLOR = "#6b7280";
+// Leaflet's default marker images do not resolve in the Next.js bundle.
+const DRAG_ICON = divIcon({
+  className: "rounded-full border-2 border-white bg-primary shadow-md",
+  iconSize: [18, 18],
+});
+// ~0.1 m, more precision than any spreadsheet coordinate needs.
+const COORDINATE_DECIMALS = 6;
 
-const FitBounds = ({ clients }: { clients: Client[] }) => {
+type FitBoundsProps = {
+  clients: Client[];
+  columnMapping: ColumnMapping | null;
+};
+
+// Fits only when the points are (re)loaded, so editing a row does not move
+// the map.
+const FitBounds = ({ clients, columnMapping }: FitBoundsProps) => {
   const map = useMap();
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `columnMapping` is the trigger; `clients` changes on every edit
   useEffect(() => {
     if (clients.length === 0) return;
     map.fitBounds(latLngBounds(clients.map(({ lat, lng }) => [lat, lng])), {
       padding: [32, 32],
       maxZoom: 15,
     });
-  }, [map, clients]);
+  }, [map, columnMapping]);
 
   return null;
 };
@@ -219,6 +241,38 @@ const MapView = () => {
     new Map<string, { shape: RegionShape; layer: Path }>(),
   );
   const orderScheduledRef = useRef(false);
+  const [menuClient, setMenuClient] = useState<Client | null>(null);
+  const [editedRowIndex, setEditedRowIndex] = useState<number | null>(null);
+  const [draggedClient, setDraggedClient] = useState<Client | null>(null);
+
+  useEffect(() => {
+    if (draggedClient === null) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDraggedClient(null);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [draggedClient]);
+
+  const finishDrag = (marker: LeafletMarker) => {
+    if (!draggedClient || !state.columnMapping) return;
+    const { lat, lng } = marker.getLatLng().wrap();
+    dispatch({
+      type: "updateCells",
+      rowIndex: draggedClient.rowIndex,
+      cells: new Map([
+        [
+          state.columnMapping.latColumn,
+          { t: "n", v: Number(lat.toFixed(COORDINATE_DECIMALS)) },
+        ],
+        [
+          state.columnMapping.lngColumn,
+          { t: "n", v: Number(lng.toFixed(COORDINATE_DECIMALS)) },
+        ],
+      ]),
+    });
+    setDraggedClient(null);
+  };
 
   // The canvas hit test picks the last-drawn layer, so smaller regions go in
   // front of larger ones and receive clicks on overlaps; `bringToBack` also
@@ -242,88 +296,160 @@ const MapView = () => {
   });
 
   return (
-    // `isolate` keeps Leaflet's high z-index panes from covering dialogs.
-    <MapContainer
-      center={BRAZIL_CENTER}
-      zoom={4}
-      preferCanvas
-      className="isolate size-full"
-    >
-      <LayersControl position="topright">
-        <LayersControl.BaseLayer checked name="Mapa">
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-        </LayersControl.BaseLayer>
-        <LayersControl.BaseLayer name="Satélite">
-          <TileLayer
-            attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
-            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          />
-        </LayersControl.BaseLayer>
-      </LayersControl>
-      {shapes.map((shape) => (
-        <RegionLayer
-          key={getShapeKey(shape)}
-          shape={shape}
-          onLayer={(layer) => {
-            if (layer) {
-              regionLayersRef.current.set(getShapeKey(shape), { shape, layer });
-            } else {
-              regionLayersRef.current.delete(getShapeKey(shape));
-            }
-          }}
-          onAdd={scheduleRegionOrder}
-        />
-      ))}
-      {clients.map((client) => {
-        const region = state.assignments.get(client.rowIndex);
-        return (
-          <CircleMarker
-            key={client.rowIndex}
-            center={[client.lat, client.lng]}
-            radius={5}
-            pathOptions={{
-              color: "#ffffff",
-              weight: 1,
-              fillColor: region ? getRegionColor(region) : POINT_COLOR,
-              fillOpacity: 0.9,
+    <>
+      {/* `isolate` keeps Leaflet's high z-index panes from covering dialogs. */}
+      <MapContainer
+        center={BRAZIL_CENTER}
+        zoom={4}
+        preferCanvas
+        className="isolate size-full"
+      >
+        <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Mapa">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Satélite">
+            <TileLayer
+              attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            />
+          </LayersControl.BaseLayer>
+        </LayersControl>
+        {shapes.map((shape) => (
+          <RegionLayer
+            key={getShapeKey(shape)}
+            shape={shape}
+            onLayer={(layer) => {
+              if (layer) {
+                regionLayersRef.current.set(getShapeKey(shape), {
+                  shape,
+                  layer,
+                });
+              } else {
+                regionLayersRef.current.delete(getShapeKey(shape));
+              }
             }}
+            onAdd={scheduleRegionOrder}
+          />
+        ))}
+        {clients.map((client) => {
+          if (client.rowIndex === draggedClient?.rowIndex) return null;
+          const region = state.assignments.get(client.rowIndex);
+          return (
+            <CircleMarker
+              key={client.rowIndex}
+              center={[client.lat, client.lng]}
+              radius={5}
+              pathOptions={{
+                color: "#ffffff",
+                weight: 1,
+                fillColor: region ? getRegionColor(region) : POINT_COLOR,
+                fillOpacity: 0.9,
+              }}
+              eventHandlers={{
+                click: (event) => {
+                  DomEvent.stopPropagation(event);
+                  if (state.editingRegion !== null) {
+                    dispatch({
+                      type: "togglePoint",
+                      rowIndex: client.rowIndex,
+                    });
+                  } else if (region === undefined) {
+                    dispatch({
+                      type: "createRegion",
+                      rowIndex: client.rowIndex,
+                    });
+                  }
+                },
+                contextmenu: (event) => {
+                  DomEvent.stopPropagation(event);
+                  setMenuClient(client);
+                },
+                mouseover: (event) => {
+                  if (!state.sheet || state.tooltipColumns.length === 0) return;
+                  (event.target as Path)
+                    .bindTooltip(
+                      buildPointTooltip(
+                        state.sheet,
+                        client.rowIndex,
+                        state.tooltipColumns,
+                        columnLabels,
+                      ),
+                      { direction: "top", offset: [0, -6] },
+                    )
+                    .openTooltip();
+                },
+                mouseout: (event) => {
+                  (event.target as Path).unbindTooltip();
+                },
+              }}
+            />
+          );
+        })}
+        {menuClient && (
+          <Popup
+            position={[menuClient.lat, menuClient.lng]}
+            closeButton={false}
+            offset={[0, -2]}
+            eventHandlers={{ remove: () => setMenuClient(null) }}
+          >
+            <div className="flex flex-col">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start"
+                onClick={() => {
+                  setEditedRowIndex(menuClient.rowIndex);
+                  setMenuClient(null);
+                }}
+              >
+                <Pencil />
+                Editar
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="justify-start"
+                onClick={() => {
+                  setDraggedClient(menuClient);
+                  setMenuClient(null);
+                }}
+              >
+                <Move />
+                Arrastar
+              </Button>
+            </div>
+          </Popup>
+        )}
+        {draggedClient && (
+          <Marker
+            draggable
+            autoPan
+            position={[draggedClient.lat, draggedClient.lng]}
+            icon={DRAG_ICON}
             eventHandlers={{
-              click: (event) => {
-                DomEvent.stopPropagation(event);
-                if (state.editingRegion !== null) {
-                  dispatch({ type: "togglePoint", rowIndex: client.rowIndex });
-                } else if (region === undefined) {
-                  dispatch({ type: "createRegion", rowIndex: client.rowIndex });
-                }
-              },
-              mouseover: (event) => {
-                if (!state.sheet || state.tooltipColumns.length === 0) return;
-                (event.target as Path)
-                  .bindTooltip(
-                    buildPointTooltip(
-                      state.sheet,
-                      client.rowIndex,
-                      state.tooltipColumns,
-                      columnLabels,
-                    ),
-                    { direction: "top", offset: [0, -6] },
-                  )
-                  .openTooltip();
-              },
-              mouseout: (event) => {
-                (event.target as Path).unbindTooltip();
-              },
+              dragend: (event) => finishDrag(event.target as LeafletMarker),
             }}
-          />
-        );
-      })}
-      <FitBounds clients={clients} />
-      <MapClickExit />
-      <InvalidateSizeOnResize />
-    </MapContainer>
+          >
+            <Tooltip permanent direction="top" offset={[0, -10]}>
+              Arraste até a nova posição (Esc cancela)
+            </Tooltip>
+          </Marker>
+        )}
+        <FitBounds clients={clients} columnMapping={state.columnMapping} />
+        <MapClickExit />
+        <InvalidateSizeOnResize />
+      </MapContainer>
+      <RowEditDialog
+        rowIndex={editedRowIndex}
+        onOpenChange={(open) => {
+          if (!open) setEditedRowIndex(null);
+        }}
+      />
+    </>
   );
 };
 
